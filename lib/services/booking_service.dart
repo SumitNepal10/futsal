@@ -40,12 +40,12 @@ class BookingService extends ChangeNotifier {
 
   void _setLoading(bool value) {
     _isLoading = value;
-    notifyListeners();
+    Future.microtask(() => notifyListeners());
   }
 
   void _setError(String? value) {
     _error = value;
-    notifyListeners();
+    Future.microtask(() => notifyListeners());
   }
 
   Future<void> fetchBookings() async {
@@ -93,12 +93,15 @@ class BookingService extends ChangeNotifier {
         body: data,
       );
 
-      final newBooking = Booking.fromJson(response);
-      _bookings.add(newBooking);
-      notifyListeners();
-
-      _setLoading(false);
-      return newBooking;
+      if (response is Map<String, dynamic>) {
+        final newBooking = Booking.fromJson(response);
+        _bookings.add(newBooking);
+        notifyListeners();
+        _setLoading(false);
+        return newBooking;
+      } else {
+        throw Exception('Unexpected response format from API. Expected Map, received ${response.runtimeType}');
+      }
     } catch (e) {
       _setError(e.toString());
       _setLoading(false);
@@ -197,14 +200,13 @@ class BookingService extends ChangeNotifier {
       _setError(null);
 
       final response = await _apiService.get(
-        '/api/time-slots',
+        '/api/bookings/available-slots/$courtId',
         queryParams: {
-          'courtId': courtId,
           'date': DateFormat('yyyy-MM-dd').format(date),
         },
       );
 
-      final List<TimeSlot> slots = (response as List)
+      final List<TimeSlot> slots = (response['slots'] as List)
           .map((json) => TimeSlot.fromJson(json))
           .toList();
 

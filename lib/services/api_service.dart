@@ -251,8 +251,8 @@ class ApiService extends ChangeNotifier {
   // Get current user data
   Future<User> getCurrentUser() async {
     try {
-      final response = await get('/api/users/profile');
-      return User.fromJson(response);
+      final response = await get('/api/auth/me');
+      return User.fromJson(response['user']);
     } catch (e) {
       throw Exception('Failed to fetch user data: $e');
     }
@@ -262,7 +262,7 @@ class ApiService extends ChangeNotifier {
   Future<List<booking_model.Booking>> getUserBookings() async {
     try {
       final response = await get('/api/bookings/my-bookings');
-      final List<dynamic> bookingsData = response['data'];
+      final List<dynamic> bookingsData = List<dynamic>.from(response);
       return bookingsData.map((json) => booking_model.Booking.fromJson(json)).toList();
     } catch (e) {
       throw Exception('Failed to fetch booking history: $e');
@@ -558,6 +558,15 @@ class ApiService extends ChangeNotifier {
       }
     } catch (e) {
       throw Exception('Failed to upload image: $e');
+    }
+  }
+
+  Future<String> getCurrentUserId() async {
+    try {
+      final response = await get('/api/auth/me');
+      return response['_id'];
+    } catch (e) {
+      throw Exception('Failed to get current user ID: $e');
     }
   }
 }

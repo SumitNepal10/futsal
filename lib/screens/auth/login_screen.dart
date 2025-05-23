@@ -41,7 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (authService.currentUser?.role == 'futsal_owner') {
         Navigator.pushReplacementNamed(context, '/owner-dashboard');
       } else {
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.pushReplacementNamed(context, '/main');
       }
     } catch (e) {
       if (!mounted) return;

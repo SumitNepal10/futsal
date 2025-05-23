@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/user_model.dart';
+import '../../models/user.dart';
 import '../../models/booking_model.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
+import '../../screens/auth/login_screen.dart';
+import 'dart:convert';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -13,7 +16,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   User? user;
-  List<Booking> bookings = [];
   bool isLoading = true;
 
   @override
@@ -26,11 +28,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final apiService = Provider.of<ApiService>(context, listen: false);
       final userData = await apiService.getCurrentUser();
-      final userBookings = await apiService.getUserBookings();
       
       setState(() {
         user = userData;
-        bookings = userBookings;
+        if (user?.phone == null) {
+          user = user?.copyWith(phone: null);
+        }
         isLoading = false;
       });
     } catch (e) {
@@ -43,6 +46,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _handleLogout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final authService = Provider.of<AuthService>(context, listen: false);
+              await authService.logout();
+              if (mounted) {
+                Navigator.pop(context); // Close dialog
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            child: const Text(
+              'Logout',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -52,92 +89,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {
-              // TODO: Implement edit profile functionality
-            },
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // User Profile Section
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: CircleAvatar(
-                        radius: 50,
-                        backgroundImage: user?.profilePicture != null
-                            ? NetworkImage(user!.profilePicture!)
-                            : null,
-                        child: user?.profilePicture == null
-                            ? const Icon(Icons.person, size: 50)
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildProfileItem('Name', user?.name ?? ''),
-                    _buildProfileItem('Email', user?.email ?? ''),
-                    if (user?.phoneNumber != null)
-                      _buildProfileItem('Phone', user!.phoneNumber!),
-                  ],
-                ),
-              ),
+            // Profile Header Section
+            CircleAvatar(
+              radius: 60,
+              backgroundImage: (user?.profilePicture != null && user!.profilePicture is String)
+                  ? (user!.profilePicture!.startsWith('data:image/')
+                      ? Image.memory(base64Decode(user!.profilePicture!.split(',').last)).image
+                      : NetworkImage(user!.profilePicture!))
+                  : null,
+              child: (user?.profilePicture == null || user!.profilePicture is! String || (user!.profilePicture is String && user!.profilePicture!.isEmpty))
+                  ? Icon(Icons.person, size: 60, color: Colors.grey[400])
+                  : null,
             ),
-            const SizedBox(height: 24),
-            
-            // Rental History Section
-            const Text(
-              'Rental History',
-              style: TextStyle(
-                fontSize: 20,
+            const SizedBox(height: 16),
+            Text(
+              user?.name ?? 'No Name',
+              style: const TextStyle(
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 16),
-            if (bookings.isEmpty)
-              const Center(
-                child: Text('No rental history available'),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: bookings.length,
-                itemBuilder: (context, index) {
-                  final booking = bookings[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      title: Text('Date: ${booking.date.toString().split(' ')[0]}'),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Time: ${booking.startTime} - ${booking.endTime}'),
-                          Text('Status: ${booking.status}'),
-                          Text('Payment: ${booking.paymentStatus}'),
-                        ],
-                      ),
-                      trailing: Text(
-                        '₹${booking.totalPrice.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  );
-                },
+            const SizedBox(height: 4),
+            Text(
+              user?.role ?? 'No Role',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
               ),
+            ),
+            const SizedBox(height: 24),
+
+            // List of Options
+            Card(
+              elevation: 2.0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: Column(
+                children: [
+                  _buildProfileOption(context, Icons.edit_outlined, 'Edit Profile', () {
+                    // TODO: Implement navigation to Edit Profile screen
+                  }),
+                  _buildDivider(),
+                  _buildProfileOption(context, Icons.lock_outline, 'Change Password', () {
+                    // TODO: Implement navigation to Change Password screen
+                  }),
+                  _buildDivider(),
+                  _buildProfileOption(context, Icons.payment_outlined, 'Payment Methods', () {
+                    // TODO: Navigate to Payment Methods screen
+                  }),
+                  _buildDivider(),
+                  _buildProfileOption(context, Icons.help_outline, 'Help & Support', () {
+                    // TODO: Navigate to Help & Support screen
+                  }),
+                  _buildDivider(),
+                  _buildProfileOption(context, Icons.logout, 'Log Out', () => _handleLogout(context)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -145,31 +161,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileItem(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.grey,
+    return Container();
+  }
+
+  Widget _buildProfileOption(BuildContext context, IconData icon, String title, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: Colors.purple[100],
+              child: Icon(icon, size: 20, color: Colors.purple[700]),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontSize: 16),
               ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 16,
-              ),
-            ),
-          ),
-        ],
+            Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildDivider() {
+    return const Divider(height: 1, indent: 16, endIndent: 16);
   }
 } 

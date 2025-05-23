@@ -18,6 +18,10 @@ import 'services/kit_service.dart';
 import 'services/booking_service.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/home/kit_browse_screen.dart';
+import 'screens/home/profile_screen.dart';
+import 'screens/home/user_kit_bookings_screen.dart';
+import 'services/kit_booking_service.dart';
 
 void main() {
   runApp(
@@ -41,6 +45,9 @@ void main() {
         ChangeNotifierProvider(
           create: (context) => FavoritesService(),
         ),
+        ChangeNotifierProvider(
+          create: (context) => KitBookingService(context.read<ApiService>(), context.read<AuthService>()),
+        ),
       ],
       child: const MyApp(),
     ),
@@ -52,13 +59,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
     return MaterialApp(
       title: 'Futsal Application',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: const LoginScreen(),
+      home: authService.currentUser != null ? const MainNavigationPage() : const LoginScreen(),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
@@ -66,6 +74,11 @@ class MyApp extends StatelessWidget {
         '/home': (context) => const HomeScreen(),
         '/add-court': (context) => const OwnerAddFutsalScreen(),
         '/add-kit': (context) => const AddKitScreen(),
+        '/main': (context) => const MainNavigationPage(),
+        '/kit-rental': (context) => const KitBrowseScreen(),
+        '/profile': (context) => const ProfileScreen(),
+        '/bookings': (context) => const BookingsScreen(),
+        '/my-kit-rentals': (context) => const UserKitBookingsScreen(),
       },
     );
   }

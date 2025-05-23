@@ -39,11 +39,13 @@ const authRoutes = require('./routes/auth');
 const futsalRoutes = require('./routes/futsal');
 const bookingRoutes = require('./routes/booking');
 const kitRoutes = require('./routes/kit');
+const kitBookingRoutes = require('./routes/kit_booking');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/futsals', futsalRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/kits', kitRoutes);
+app.use('/api/kit-bookings', kitBookingRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

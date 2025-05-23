@@ -90,14 +90,14 @@ class Booking {
 
   factory Booking.fromJson(Map<String, dynamic> json) {
     return Booking(
-      id: json['_id'],
+      id: json['_id'] as String? ?? '',
       date: DateTime.parse(json['date']),
-      startTime: json['startTime'],
-      endTime: json['endTime'],
-      status: json['status'],
+      startTime: json['startTime'] as String? ?? '',
+      endTime: json['endTime'] as String? ?? '',
+      status: json['status'] as String? ?? '',
       totalPrice: json['totalPrice'].toDouble(),
-      user: BookingUser.fromJson(json['user']),
-      field: Field.fromJson(json['field']),
+      user: json['user'] is Map<String, dynamic> ? BookingUser.fromJson(json['user']) : BookingUser(id: json['user'].toString(), name: 'Unknown User', phone: '', email: ''),
+      field: json['field'] is Map<String, dynamic> ? Field.fromJson(json['field']) : Field(id: json['field'].toString(), name: 'Unknown Futsal', description: '', price: 0.0, isAvailable: true, createdAt: DateTime.now(), updatedAt: DateTime.now()),
       kitRental: json['kitRental'] != null ? KitRental.fromJson(json['kitRental']) : null,
       createdAt: DateTime.parse(json['createdAt']),
       updatedAt: DateTime.parse(json['updatedAt']),

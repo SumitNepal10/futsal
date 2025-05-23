@@ -32,11 +32,6 @@ const bookingSchema = new mongoose.Schema({
         enum: ['pending', 'confirmed', 'cancelled', 'completed'],
         default: 'pending'
     },
-    paymentStatus: {
-        type: String,
-        enum: ['pending', 'paid', 'refunded'],
-        default: 'pending'
-    },
     kitRentals: [{
         kit: {
             type: mongoose.Schema.Types.ObjectId,

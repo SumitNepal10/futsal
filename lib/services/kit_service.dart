@@ -139,14 +139,35 @@ class KitService extends ChangeNotifier {
 
   Future<List<Kit>> getKitsByCourt(String courtId) async {
     try {
-      final response = await _apiService.get('/kits', queryParams: {'futsal': courtId});
+      final data = await _apiService.get('/api/kits/futsal/$courtId');
       
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.map((json) => Kit.fromJson(json)).toList();
+      if (data is List) {
+        print('Received ${data.length} kits from server');
+        final kits = data.map((json) => Kit.fromJson(json)).toList();
+        print('Successfully parsed ${kits.length} kits');
+        return kits;
       }
+      print('Invalid response format: $data');
       return [];
     } catch (e) {
+      print('Error fetching kits: $e');
+      _error = e.toString();
+      notifyListeners();
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getUserRentals(String userId) async {
+    try {
+      final response = await _apiService.get('/api/kit-bookings/user/$userId');
+      
+      if (response is List) {
+        return List<Map<String, dynamic>>.from(response);
+      }
+      print('KitService: Invalid response format: $response');
+      return [];
+    } catch (e) {
+      print('KitService: Error fetching user rentals: $e');
       _error = e.toString();
       notifyListeners();
       return [];

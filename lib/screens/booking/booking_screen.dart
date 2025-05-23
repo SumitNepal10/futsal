@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../services/booking_service.dart';
 import '../../services/payment_service.dart';
 import '../../models/booking_model.dart';
+import '../../services/auth_service.dart';
 
 class BookingScreen extends StatefulWidget {
   final String futsalId;
@@ -78,19 +79,26 @@ class _BookingScreenState extends State<BookingScreen> {
 
     try {
       final bookingService = Provider.of<BookingService>(context, listen: false);
+      final authService = Provider.of<AuthService>(context, listen: false);
       final paymentService = Provider.of<PaymentService>(context, listen: false);
 
-      // Create booking
+      final currentUser = authService.currentUser;
+      if (currentUser == null) {
+        throw Exception('User not logged in.');
+      }
+
       final booking = await bookingService.createBooking(
-        futsalId: widget.futsalId,
-        date: _selectedDate,
-        startTime: _selectedStartTime,
-        endTime: _selectedEndTime,
-        totalPrice: _calculateTotalPrice(),
+        {
+          'futsal': widget.futsalId,
+          'date': _selectedDate.toIso8601String(),
+          'startTime': _selectedStartTime,
+          'endTime': _selectedEndTime,
+          'totalPrice': _calculateTotalPrice(),
+          'user': currentUser.id,
+        },
       );
 
       if (booking != null) {
-        // Process payment
         final payment = await paymentService.processPayment(
           bookingId: booking.id,
           amount: booking.totalPrice,

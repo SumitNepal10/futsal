@@ -13,17 +13,20 @@ import '../../models/booking.dart';
 import '../../services/booking_service.dart';
 import '../../services/kit_service.dart';
 import 'kit_rental_screen.dart';
+import 'dart:async'; // Import dart:async for Timer
 
 class BookingScreen extends StatefulWidget {
   final String courtId;
   final String courtName;
   final double pricePerHour;
+  final TimeSlot? selectedSlot;
 
   const BookingScreen({
     Key? key,
     required this.courtId,
     required this.courtName,
     required this.pricePerHour,
+    this.selectedSlot,
   }) : super(key: key);
 
   @override
@@ -41,18 +44,26 @@ class _BookingScreenState extends State<BookingScreen> {
   DateTime _selectedDate = DateTime.now();
   List<TimeSlot> _availableSlots = [];
   TimeSlot? _selectedSlot;
+  Timer? _timer; // Add a Timer variable
 
   @override
   void initState() {
     super.initState();
     _loadCourts();
-    _fetchAvailableSlots();
+    if (widget.selectedSlot != null) {
+      setState(() {
+        _selectedSlot = widget.selectedSlot;
+      });
+    } else {
+      _fetchAvailableSlots();
+    }
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _mapController?.dispose();
+    _timer?.cancel(); // Cancel the timer in dispose
     super.dispose();
   }
 
@@ -108,6 +119,9 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _showBookingDialog(FutsalCourt court) async {
+    // Cancel any existing timer before showing a new dialog
+    _timer?.cancel();
+
     final DateTime now = DateTime.now();
     final List<DateTime> availableSlots = [];
     
@@ -119,9 +133,10 @@ class _BookingScreenState extends State<BookingScreen> {
       for (int i = 0; i < 7; i++) {
         final DateTime date = DateTime(now.year, now.month, now.day + i);
         DateTime slot = DateTime(date.year, date.month, date.day, openingTime.hour, openingTime.minute);
-        
+
         while (slot.isBefore(DateTime(date.year, date.month, date.day, closingTime.hour, closingTime.minute))) {
-          if (slot.isAfter(now)) { // Only add future slots
+          // Only add future slots based on current time for today, or all slots for future days
+          if (date.isAfter(DateTime(now.year, now.month, now.day)) || slot.isAfter(DateTime.now())) {
             availableSlots.add(slot);
           }
           slot = slot.add(const Duration(hours: 1));
@@ -130,6 +145,21 @@ class _BookingScreenState extends State<BookingScreen> {
     }
 
     if (!mounted) return;
+
+    // Filter out past slots before showing the dialog
+    List<DateTime> currentAvailableSlots = availableSlots.where((slot) => slot.isAfter(DateTime.now())).toList();
+
+    // Start a timer to periodically refresh the dialog
+    _timer = Timer.periodic(const Duration(seconds: 30), (Timer t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() {
+        // Re-filter the list to update the UI
+        currentAvailableSlots = availableSlots.where((slot) => slot.isAfter(DateTime.now())).toList();
+      });
+    });
 
     showModalBottomSheet(
       context: context,
@@ -224,9 +254,9 @@ class _BookingScreenState extends State<BookingScreen> {
                 SizedBox(
                   height: 200,
                   child: ListView.builder(
-                    itemCount: availableSlots.length,
+                    itemCount: currentAvailableSlots.length,
                     itemBuilder: (context, index) {
-                      final slot = availableSlots[index];
+                      final slot = currentAvailableSlots[index];
                       return ListTile(
                         title: Text(
                           slot != null ? DateFormat('EEEE, MMMM d, y').format(slot) : 'Unknown Date',
@@ -256,6 +286,9 @@ class _BookingScreenState extends State<BookingScreen> {
         ),
       ),
     );
+
+    // Cancel the timer after the dialog is dismissed
+    _timer?.cancel();
   }
 
   DateTime? _parseTime(String time) {
@@ -284,8 +317,20 @@ class _BookingScreenState extends State<BookingScreen> {
         widget.courtId,
         _selectedDate,
       );
+      // Filter out slots that are not available and are in the past
+      final now = DateTime.now();
+      final availableSlots = slots.where((slot) {
+        final slotStartDateTime = DateTime(
+          _selectedDate.year,
+          _selectedDate.month,
+          _selectedDate.day,
+          int.parse(slot.startTime.split(':')[0]),
+          int.parse(slot.startTime.split(':')[1]),
+        );
+        return slot.isAvailable && slotStartDateTime.isAfter(now);
+      }).toList();
       setState(() {
-        _availableSlots = slots;
+        _availableSlots = availableSlots;
         _selectedSlot = null;
       });
     } catch (e) {
@@ -347,16 +392,28 @@ class _BookingScreenState extends State<BookingScreen> {
       // Show success dialog
       await showDialog(
         context: context,
+        barrierDismissible: false,
         builder: (context) => AlertDialog(
-          title: const Text('Booking Successful'),
-          content: const Text('Would you like to rent kits for this booking?'),
+          title: const Text('Booking Successful!'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Your booking has been confirmed.'),
+              const SizedBox(height: 8),
+              Text('Court: ${widget.courtName}'),
+              Text('Date: ${DateFormat('MMM d, y').format(_selectedDate)}'),
+              Text('Time: ${_selectedSlot!.startTime} - ${_selectedSlot!.endTime}'),
+              Text('Price: RS${_selectedSlot!.price.toStringAsFixed(2)}'),
+            ],
+          ),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context); // Close dialog
-                Navigator.pop(context); // Return to previous screen
+                Navigator.pop(context); // Return to home screen
               },
-              child: const Text('No'),
+              child: const Text('Back to Home'),
             ),
             TextButton(
               onPressed: () {
@@ -368,7 +425,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   ),
                 );
               },
-              child: const Text('Yes'),
+              child: const Text('Rent Kits'),
             ),
           ],
         ),
@@ -425,198 +482,136 @@ class _BookingScreenState extends State<BookingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search futsal courts...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
+      appBar: AppBar(
+        title: Text('Book ${widget.courtName}'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Selected Time Slot
+            if (_selectedSlot != null) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Selected Time Slot',
+                        style: Theme.of(context).textTheme.titleLarge,
                       ),
-                    ),
-                    onChanged: (value) {
-                      // TODO: Implement search functionality
-                    },
+                      const SizedBox(height: 8),
+                      Text(
+                        'Time: ${_selectedSlot!.startTime} - ${_selectedSlot!.endTime}',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Price: RS${_selectedSlot!.price.toStringAsFixed(2)}',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(_isMapView ? Icons.list : Icons.map),
-                  onPressed: () {
-                    setState(() {
-                      _isMapView = !_isMapView;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'Error loading courts: $_error',
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: _loadCourts,
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _confirmBooking,
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : _isMapView
-                        ? GoogleMap(
-                            initialCameraPosition: const CameraPosition(
-                              target: LatLng(3.1469, 101.6932),
-                              zoom: 12,
-                            ),
-                            markers: _markers,
-                            onMapCreated: (controller) {
-                              _mapController = controller;
-                            },
-                          )
-                        : RefreshIndicator(
-                            onRefresh: _loadCourts,
-                            child: _courts.isEmpty
-                                ? const Center(
-                                    child: Text('No futsal courts available'),
-                                  )
-                                : ListView.builder(
-                                    itemCount: _courts.length,
-                                    itemBuilder: (context, index) {
-                                      final court = _courts[index];
-                                      return Card(
-                                        margin: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                        child: InkWell(
-                                          onTap: () => _showBookingDialog(court),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              ClipRRect(
-                                                borderRadius:
-                                                    const BorderRadius.vertical(
-                                                  top: Radius.circular(4),
-                                                ),
-                                                child: Builder(
-                                                  builder: (context) {
-                                                    final imageUrl = (court.images != null && court.images!.isNotEmpty) ? court.images![0] : null;
-                                                    if (imageUrl != null && imageUrl.startsWith('http')) {
-                                                      return Image.network(
-                                                        imageUrl,
-                                                        height: 150,
-                                                        width: double.infinity,
-                                                        fit: BoxFit.cover,
-                                                        errorBuilder: (context, error, stackTrace) => Image.asset(
-                                                          'assets/images/futsal_arena.png',
-                                                          height: 150,
-                                                          width: double.infinity,
-                                                          fit: BoxFit.cover,
-                                                        ),
-                                                      );
-                                                    } else if (imageUrl != null && imageUrl.startsWith('data:image')) {
-                                                      try {
-                                                        return Image.memory(
-                                                          base64Decode(imageUrl.split(',').last),
-                                                          height: 150,
-                                                          width: double.infinity,
-                                                          fit: BoxFit.cover,
-                                                          errorBuilder: (context, error, stackTrace) => Image.asset(
-                                                            'assets/images/futsal_arena.png',
-                                                            height: 150,
-                                                            width: double.infinity,
-                                                            fit: BoxFit.cover,
-                                                          ),
-                                                        );
-                                                      } catch (e) {
-                                                        return Image.asset(
-                                                          'assets/images/futsal_arena.png',
-                                                          height: 150,
-                                                          width: double.infinity,
-                                                          fit: BoxFit.cover,
-                                                        );
-                                                      }
-                                                    } else {
-                                                      return Image.asset(
-                                                        'assets/images/futsal_arena.png',
-                                                        height: 150,
-                                                        width: double.infinity,
-                                                        fit: BoxFit.cover,
-                                                      );
-                                                    }
-                                                  },
-                                                ),
-                                              ),
-                                              Padding(
-                                                padding: const EdgeInsets.all(16),
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Row(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceBetween,
-                                                      children: [
-                                                        Expanded(
-                                                          child: Text(
-                                                            court.name ?? 'Unknown Futsal',
-                                                            style: Theme.of(context)
-                                                                .textTheme
-                                                                .titleLarge,
-                                                          ),
-                                                        ),
-                                                        Text(
-                                                          '\$${court.pricePerHour?.toStringAsFixed(2) ?? 'N/A'}/hour',
-                                                          style: Theme.of(context)
-                                                              .textTheme
-                                                              .titleMedium,
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    Text(
-                                                      court.location ?? 'Unknown Location',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium,
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    Text(
-                                                      'Hours: ${court.openingTime} - ${court.closingTime}',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium,
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    },
+                    : const Text('Confirm Booking'),
+              ),
+            ] else ...[
+              // Date Selection
+              ListTile(
+                title: const Text('Select Date'),
+                subtitle: Text(
+                  '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
+                ),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: _selectDate,
+              ),
+              const SizedBox(height: 16),
+
+              // Available Time Slots
+              Text(
+                'Available Time Slots',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
+                      : _availableSlots.isEmpty
+                          ? const Center(child: Text('No available slots for selected date'))
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: _availableSlots.length,
+                              itemBuilder: (context, index) {
+                                final slot = _availableSlots[index];
+                                return Card(
+                                  child: ListTile(
+                                    title: Text('${slot.startTime} - ${slot.endTime}'),
+                                    subtitle: Text('Price: RS${slot.price.toStringAsFixed(2)}'),
+                                    trailing: ElevatedButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _selectedSlot = slot;
+                                        });
+                                      },
+                                      child: const Text('Select'),
+                                    ),
                                   ),
-                          ),
+                                );
+                              },
+                            ),
+            ],
+          ],
+        ),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 1, // Set to 1 since this is the booking screen
+        type: BottomNavigationBarType.fixed, // Add this to show all items
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today),
+            label: 'Bookings',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.sports_soccer),
+            label: 'Kit Rental',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profile',
           ),
         ],
+        onTap: (index) {
+          if (index == 0) {
+            // Navigate to home
+            Navigator.pushReplacementNamed(context, '/home');
+          } else if (index == 1) {
+            // Already on bookings screen
+          } else if (index == 2) {
+            // Navigate to kit rental
+            Navigator.pushReplacementNamed(context, '/kit-rental');
+          } else if (index == 3) {
+            // Navigate to profile
+            Navigator.pushReplacementNamed(context, '/profile');
+          }
+        },
       ),
     );
   }

@@ -225,6 +225,39 @@ class _FutsalListScreenState extends State<FutsalListScreen> {
           );
         },
       ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 0, // Set to 0 since this is the home/futsal list screen
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today),
+            label: 'Bookings',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.sports_soccer),
+            label: 'Kit Rental',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
+        onTap: (index) {
+          if (index == 0) {
+            // Already on home
+          } else if (index == 1) {
+            Navigator.pushReplacementNamed(context, '/bookings');
+          } else if (index == 2) {
+            Navigator.pushReplacementNamed(context, '/kit-rental');
+          } else if (index == 3) {
+            Navigator.pushReplacementNamed(context, '/profile');
+          }
+        },
+      ),
     );
   }
 } 

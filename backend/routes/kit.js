@@ -21,13 +21,16 @@ router.get('/futsal/:futsalId', async (req, res) => {
     try {
         // Validate futsalId
         if (!mongoose.Types.ObjectId.isValid(req.params.futsalId)) {
+            console.log('Invalid futsal ID:', req.params.futsalId);
             return res.status(400).json({ message: 'Invalid futsal ID' });
         }
 
+        console.log('Fetching kits for futsal ID:', req.params.futsalId);
         const kits = await Kit.find({ futsal: req.params.futsalId });
+        console.log(`Found ${kits.length} kits for futsal ${req.params.futsalId}`);
         res.json(kits);
     } catch (error) {
-        console.error(error);
+        console.error('Error fetching kits by futsal:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });

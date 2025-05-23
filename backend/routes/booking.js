@@ -65,20 +65,23 @@ router.get('/available-slots/:futsalId', async (req, res) => {
         const endTime = new Date(`${date}T${futsal.closingTime}`);
         
         for (let time = startTime; time < endTime; time.setHours(time.getHours() + 1)) {
-            const slotStart = time.toLocaleTimeString('en-US', { hour12: false });
-            const slotEnd = new Date(time.getTime() + 60 * 60 * 1000)
-                .toLocaleTimeString('en-US', { hour12: false });
-            
-            const isBooked = bookings.some(booking => 
-                booking.startTime === slotStart && booking.endTime === slotEnd
-            );
+            // Only add slots that are in the future
+            if (time.getTime() > Date.now()) {
+                const slotStart = time.toLocaleTimeString('en-US', { hour12: false });
+                const slotEnd = new Date(time.getTime() + 60 * 60 * 1000)
+                    .toLocaleTimeString('en-US', { hour12: false });
+                
+                const isBooked = bookings.some(booking => 
+                    booking.startTime === slotStart && booking.endTime === slotEnd
+                );
 
-            slots.push({
-                startTime: slotStart,
-                endTime: slotEnd,
-                isAvailable: !isBooked,
-                price: futsal.pricePerHour
-            });
+                slots.push({
+                    startTime: slotStart,
+                    endTime: slotEnd,
+                    isAvailable: !isBooked,
+                    price: futsal.pricePerHour
+                });
+            }
         }
 
         res.json({ slots });

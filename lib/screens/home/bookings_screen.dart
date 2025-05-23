@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
+import '../../services/api_service.dart';
 import 'package:provider/provider.dart';
+import '../../models/booking.dart';
+import 'package:intl/intl.dart';
 
 class BookingsScreen extends StatefulWidget {
   const BookingsScreen({Key? key}) : super(key: key);
@@ -12,7 +14,7 @@ class BookingsScreen extends StatefulWidget {
 class _BookingsScreenState extends State<BookingsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  List<Map<String, dynamic>> _bookings = [];
+  List<Booking> _bookings = [];
   bool _isLoading = false;
   String _selectedFilter = 'all';
 
@@ -33,8 +35,9 @@ class _BookingsScreenState extends State<BookingsScreen>
     setState(() => _isLoading = true);
     try {
       final apiService = Provider.of<ApiService>(context, listen: false);
-      final bookings = await apiService.getOwnerBookings(_selectedFilter);
-      setState(() => _bookings = List<Map<String, dynamic>>.from(bookings));
+      final List<dynamic> data = await apiService.getOwnerBookings(_selectedFilter);
+      final bookings = data.map((json) => Booking.fromJson(json)).toList();
+      setState(() => _bookings = List<Booking>.from(bookings));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error fetching bookings: $e')),
@@ -104,15 +107,38 @@ class _BookingsScreenState extends State<BookingsScreen>
   }
 
   Widget _buildBookingsList(String type) {
+    final now = DateTime.now();
     final filteredBookings = _bookings.where((booking) {
-      final status = booking['status']?.toLowerCase() ?? '';
+      final status = booking.status?.toLowerCase() ?? '';
+      final bookingStartDateTime = DateTime(
+        booking.date.year,
+        booking.date.month,
+        booking.date.day,
+        int.parse(booking.startTime.split(':')[0]),
+        int.parse(booking.startTime.split(':')[1]),
+      );
+      final bookingEndDateTime = DateTime(
+        booking.date.year,
+        booking.date.month,
+        booking.date.day,
+        int.parse(booking.endTime.split(':')[0]),
+        int.parse(booking.endTime.split(':')[1]),
+      );
+
       switch (type) {
         case 'upcoming':
-          return status == 'pending' || status == 'confirmed';
+          // Upcoming: Booking date is in the future, or today but start time is in the future
+          return (status == 'pending' || status == 'confirmed') &&
+                 bookingStartDateTime.isAfter(now);
         case 'active':
-          return status == 'active';
+          // Active: Booking date is today and current time is between start and end time
+          return (status == 'confirmed' || status == 'active') &&
+                 bookingStartDateTime.isBefore(now) &&
+                 bookingEndDateTime.isAfter(now);
         case 'past':
-          return status == 'completed' || status == 'cancelled';
+          // Past: Booking date is in the past, or today but end time is in the past
+          return (status == 'completed' || status == 'cancelled') ||
+                 bookingEndDateTime.isBefore(now);
         default:
           return true;
       }
@@ -146,92 +172,45 @@ class _BookingsScreenState extends State<BookingsScreen>
       itemCount: filteredBookings.length,
       itemBuilder: (context, index) {
         final booking = filteredBookings[index];
-        final futsalName = booking['futsalName'] ?? 'N/A';
-        final courtNumber = booking['courtNumber'] ?? 'N/A';
-        final date = booking['date'] ?? 'N/A';
-        final startTime = booking['startTime'] ?? 'N/A';
-        final endTime = booking['endTime'] ?? 'N/A';
-        final userName = booking['userName'] ?? 'N/A';
-        final status = booking['status'] ?? 'Unknown';
-        final statusColor = _getStatusColor(status);
-
         return Card(
-          margin: const EdgeInsets.symmetric(vertical: 8.0),
-          elevation: 2.0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10.0),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10.0),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: _getStatusColor(booking.status),
+              child: const Icon(
+                Icons.sports_soccer,
+                color: Colors.white,
+              ),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Court: ${booking.futsalName}'),
+                Text(
+                  'Date: ${DateFormat('MMM d, y').format(booking.date)} (${booking.startTime} - ${booking.endTime})',
+                ),
+                Text('Booked by: ${booking.user.name}'),
+              ],
+            ),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: _getStatusColor(booking.status),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                booking.status ?? 'Unknown',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                ),
+              ),
+            ),
             onTap: () => Navigator.of(context).pushNamed(
               '/booking-details',
               arguments: booking,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          futsalName,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8.0,
-                          vertical: 4.0,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor,
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                        child: Text(
-                          status,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12.0,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8.0),
-                  Text(
-                    'Court: $courtNumber',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8.0),
-                  Row(
-                    children: [
-                      Icon(Icons.calendar_today, size: 18, color: Colors.grey[700]),
-                      const SizedBox(width: 4.0),
-                      Text(
-                        '$date ($startTime - $endTime)',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8.0),
-                  Row(
-                    children: [
-                      Icon(Icons.person, size: 18, color: Colors.grey[700]),
-                      const SizedBox(width: 4.0),
-                      Text(
-                        'Booked by: $userName',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
           ),
         );
