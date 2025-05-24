@@ -24,9 +24,10 @@ class FutsalCourtService extends ChangeNotifier {
   FutsalCourtService({required ApiService apiService}) : _apiService = apiService;
 
   List<FutsalCourt> get courts => List.unmodifiable(_courts);
-  List<FutsalCourt> get ownerCourts => _isOwnerView ? List.unmodifiable(_courts) : [];
+  List<FutsalCourt> get ownerCourts => List.unmodifiable(_courts); // Always return courts for owner view
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get isOwnerView => _isOwnerView; // Expose the isOwnerView flag
 
   @override
   void addListener(VoidCallback listener) {

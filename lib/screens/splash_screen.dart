@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:futsal_application/services/auth_service.dart';
-import 'package:futsal_application/screens/auth/login_screen.dart';
-import 'package:futsal_application/screens/home/home_screen.dart';
+import '../services/auth_service.dart';
+import 'auth/login_screen.dart';
+import 'home/home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});

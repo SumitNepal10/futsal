@@ -31,6 +31,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    print('OwnerDashboardScreen: initState called'); // Debug log
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
       _fetchOwnerBookings();
@@ -103,10 +104,16 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
     
     try {
       final futsalCourtService = Provider.of<FutsalCourtService>(context, listen: false);
-      await futsalCourtService.fetchOwnerCourts();
+      print('OwnerDashboardScreen: Before fetchOwnerCourts()'); // Debug log
+      final courts = await futsalCourtService.fetchOwnerCourts();
+      print('OwnerDashboardScreen: After fetchOwnerCourts()'); // Debug log
+      print('OwnerDashboardScreen: Fetched ${courts.length} courts'); // Debug log
+      print('OwnerDashboardScreen: Owner view flag: ${futsalCourtService.isOwnerView}'); // Debug log
+      print('OwnerDashboardScreen: Courts data: $courts'); // Debug log
       
       if (!mounted) return;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('Error in _loadData: $e\n$stackTrace'); // Debug log with stack trace
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
            if (mounted) {
@@ -162,15 +169,26 @@ class MyCourtsSection extends StatefulWidget {
 }
 
 class _MyCourtsSectionState extends State<MyCourtsSection> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
+  }
+  
   Future<void> _loadData() async {
     if (!mounted) return;
     
     try {
       final futsalCourtService = Provider.of<FutsalCourtService>(context, listen: false);
-      await futsalCourtService.fetchOwnerCourts();
+      final courts = await futsalCourtService.fetchOwnerCourts();
+      print('MyCourtsSection: Fetched owner courts: ${courts.length}'); // Debug log
+      print('MyCourtsSection: Courts data: $courts'); // Print court data
       
       if (!mounted) return;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('Error in MyCourtsSection._loadData: $e\n$stackTrace'); // Debug log with stack trace
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
            if (mounted) {

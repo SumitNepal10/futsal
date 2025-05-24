@@ -137,14 +137,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // TODO: Implement navigation to Edit Profile screen
                   }),
                   _buildDivider(),
-                  _buildProfileOption(context, Icons.lock_outline, 'Change Password', () {
-                    // TODO: Implement navigation to Change Password screen
-                  }),
-                  _buildDivider(),
-                  _buildProfileOption(context, Icons.payment_outlined, 'Payment Methods', () {
-                    // TODO: Navigate to Payment Methods screen
-                  }),
-                  _buildDivider(),
                   _buildProfileOption(context, Icons.help_outline, 'Help & Support', () {
                     // TODO: Navigate to Help & Support screen
                   }),

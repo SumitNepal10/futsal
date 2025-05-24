@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
-import 'package:futsal_application/pages/payment_methods_page.dart';
-import 'package:futsal_application/models/futsal_court.dart';
+import '../../pages/payment_methods_page.dart';
+import '../../models/futsal_court.dart';
 
 class BookingConfirmationPage extends StatefulWidget {
   final FutsalCourt court;

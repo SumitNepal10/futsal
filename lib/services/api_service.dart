@@ -246,7 +246,16 @@ class ApiService extends ChangeNotifier {
   
   // Logout and remove token
   Future<void> logout() async {
-    await clearAuthToken();
+    try {
+      // Clear the auth token which effectively logs the user out
+      await clearAuthToken();
+      print('User logged out successfully'); // Debug log
+      return Future.value();
+    } catch (e) {
+      print('Error during logout: $e'); // Debug log
+      _setError('Error during logout: ${e.toString()}');
+      rethrow;
+    }
   }
 
   // Get current user data

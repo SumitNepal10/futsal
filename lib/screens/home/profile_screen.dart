@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/user.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -40,30 +41,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
-                  child: Column(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                        children: [
                           Text(
                             'Name: ${authService.currentUser!.name}',
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 8),
-                            Text(
+                          Text(
                             'Email: ${authService.currentUser!.email}',
                             style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
                             'Role: ${authService.currentUser!.role}',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                         ],
                       ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      // TODO: Implement edit profile functionality
+                      print('Edit Profile button pressed!');
+                      // Navigate to an edit profile screen or show a modal
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const EditProfileScreen(),
+                        ),
+                      );
+                    },
+                    child: const Text('Edit Profile'),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 } 
