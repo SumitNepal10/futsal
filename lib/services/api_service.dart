@@ -360,24 +360,7 @@ class ApiService extends ChangeNotifier {
         print('Response is in unexpected format');
         return [];
       }
-      
-      print('Number of bookings: ${bookings.length}');
-      for (var booking in bookings) {
-        print('Booking ID: ${booking['_id']}');
-        print('Booking User: ${booking['user']}');
-        print('Booking Futsal: ${booking['futsal']}');
-        print('Booking Kit Rentals: ${booking['kitRentals']}');
-        if (booking['kitRentals'] != null) {
-          print('Kit Rentals Type: ${booking['kitRentals'].runtimeType}');
-          if (booking['kitRentals'] is List) {
-            print('Number of Kit Rentals: ${booking['kitRentals'].length}');
-            for (var rental in booking['kitRentals']) {
-              print('Kit Rental Details: $rental');
-            }
-          }
-        }
-      }
-      
+            
       return bookings;
       
       return [];
@@ -614,7 +597,6 @@ class ApiService extends ChangeNotifier {
       throw Exception('Failed to get current user ID: $e');
     }
   }
-
 }
 
 class HttpException implements Exception {

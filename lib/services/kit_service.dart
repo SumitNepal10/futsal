@@ -142,9 +142,7 @@ class KitService extends ChangeNotifier {
       final data = await _apiService.get('/api/kits/futsal/$courtId');
       
       if (data is List) {
-        print('Received ${data.length} kits from server');
         final kits = data.map((json) => Kit.fromJson(json)).toList();
-        print('Successfully parsed ${kits.length} kits');
         return kits;
       }
       print('Invalid response format: $data');

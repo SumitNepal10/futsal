@@ -25,11 +25,6 @@ class KitBookingService extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      print('Creating kit booking with data:');
-      print('futsalId: $futsalId');
-      print('bookingId: $bookingId');
-      print('kitRentals: $kitRentals');
-
       final dynamic responseData = await _apiService.post(
         '/api/kit-bookings',
         body: {
@@ -73,11 +68,9 @@ class KitBookingService extends ChangeNotifier {
         '/api/kit-bookings/user/$userId',
         requireAuth: false
       );
-      print('KitBookingService: API Response received: $responseData');
 
       final List<dynamic> data = responseData;
       final bookings = data.map((json) => KitBooking.fromJson(json as Map<String, dynamic>)).toList();
-      print('KitBookingService: Successfully parsed ${bookings.length} bookings');
       return bookings;
 
     } catch (e) {
