@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Booking = require('../models/Booking');
 const Futsal = require('../models/Futsal');
+const Kit = require('../models/Kit');
 const { verifyToken } = require('../middleware/auth');
 
 // Get all bookings
@@ -60,28 +61,116 @@ router.get('/available-slots/:futsalId', async (req, res) => {
         const bookings = await Booking.getAvailableSlots(futsalId, date);
 
         // Generate all possible time slots
-        const slots = [];
-        const startTime = new Date(`${date}T${futsal.openingTime}`);
-        const endTime = new Date(`${date}T${futsal.closingTime}`);
-        
-        for (let time = startTime; time < endTime; time.setHours(time.getHours() + 1)) {
-            // Only add slots that are in the future
-            if (time.getTime() > Date.now()) {
-                const slotStart = time.toLocaleTimeString('en-US', { hour12: false });
-                const slotEnd = new Date(time.getTime() + 60 * 60 * 1000)
-                    .toLocaleTimeString('en-US', { hour12: false });
-                
-                const isBooked = bookings.some(booking => 
-                    booking.startTime === slotStart && booking.endTime === slotEnd
-                );
+        console.log('Received date:', date);
+        console.log('Futsal opening time:', futsal.openingTime);
+        console.log('Futsal closing time:', futsal.closingTime);
 
-                slots.push({
+        const slots = [];
+        
+        // Get current time in local timezone
+        const now = new Date();
+        
+        // Parse the request date and set it to midnight
+        const [year, month, day] = date.split('-').map(Number);
+        const requestDate = new Date(year, month - 1, day); // month is 0-based in JS
+        
+        console.log('Current time:', now.toLocaleString());
+        console.log('Request date (midnight):', requestDate.toLocaleString());
+        
+        // Set hours and minutes from opening time
+        const [openHours, openMinutes] = futsal.openingTime.split(':').map(Number);
+        const [closeHours, closeMinutes] = futsal.closingTime.split(':').map(Number);
+        
+        console.log(`Opening time: ${openHours}:${openMinutes.toString().padStart(2, '0')}`);
+        console.log(`Closing time: ${closeHours}:${closeMinutes.toString().padStart(2, '0')}`);
+        
+        // Create start and end times for the requested date
+        const startTime = new Date(year, month - 1, day, openHours, openMinutes, 0);
+        const endTime = new Date(year, month - 1, day, closeHours, closeMinutes, 0);
+        
+        console.log('Start time:', startTime.toLocaleString());
+        console.log('End time:', endTime.toLocaleString());
+        
+        // Compare dates using year, month, and day
+        const isToday = requestDate.getFullYear() === now.getFullYear() &&
+                        requestDate.getMonth() === now.getMonth() &&
+                        requestDate.getDate() === now.getDate();
+        
+        console.log('Is today:', isToday);
+        
+        // If it's today and current time is past closing time or too close to it
+        const currentHour = now.getHours();
+        console.log('Current hour:', currentHour);
+        
+        if (isToday && currentHour >= closeHours - 1) {
+            console.log('Current time is past or too close to closing time');
+            
+            // Instead of returning empty slots, calculate tomorrow's slots
+            console.log('Returning slots for tomorrow instead');
+            
+            // Create tomorrow's date
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(0, 0, 0, 0); // Reset to midnight
+            
+            console.log('Tomorrow date:', tomorrow.toLocaleString());
+            
+            // Calculate slots for tomorrow
+            const tomorrowSlots = [];
+            
+            const tomorrowStartTime = new Date(tomorrow);
+            tomorrowStartTime.setHours(openHours, openMinutes, 0);
+            
+            const tomorrowEndTime = new Date(tomorrow);
+            tomorrowEndTime.setHours(closeHours, closeMinutes, 0);
+            
+            // Generate slots for tomorrow
+            for (let time = new Date(tomorrowStartTime); time < tomorrowEndTime; time.setHours(time.getHours() + 1)) {
+                const slotStart = time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                const slotEnd = new Date(time.getTime() + 60 * 60 * 1000)
+                    .toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                
+                tomorrowSlots.push({
                     startTime: slotStart,
                     endTime: slotEnd,
-                    isAvailable: !isBooked,
+                    isAvailable: true,
                     price: futsal.pricePerHour
                 });
             }
+            
+            return res.json({ slots: tomorrowSlots });
+        }
+        
+        // If today but not past closing time, start from next hour
+        if (isToday) {
+            // Start from next hour, but don't exceed closing time
+            const nextHour = Math.min(Math.max(currentHour + 1, openHours), closeHours - 1);
+            console.log('Current hour:', currentHour, 'Next available hour:', nextHour);
+            startTime.setHours(nextHour, 0, 0);
+            console.log('Adjusted start time:', startTime.toLocaleString());
+        }
+        
+        // Don't generate any slots if start time is after or equal to end time
+        if (startTime >= endTime) {
+            console.log('No slots available - start time is after end time');
+            return res.json({ slots: [] });
+        }
+
+        for (let time = new Date(startTime); time < endTime; time.setHours(time.getHours() + 1)) {
+            const slotStart = time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+            const slotEnd = new Date(time.getTime() + 60 * 60 * 1000)
+                .toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+            
+            const isBooked = bookings.some(booking => 
+                booking.startTime === slotStart && booking.endTime === slotEnd
+            );
+
+            slots.push({
+                startTime: slotStart,
+                endTime: slotEnd,
+                isAvailable: !isBooked,
+                price: futsal.pricePerHour
+            });
         }
 
         res.json({ slots });
@@ -109,11 +198,58 @@ router.post('/', verifyToken, async (req, res) => {
             return res.status(400).json({ message: 'Time slot already booked' });
         }
 
-        // Calculate total price
+        // Calculate court rental price
         const start = new Date(`${date}T${startTime}`);
         const end = new Date(`${date}T${endTime}`);
         const hours = (end - start) / (1000 * 60 * 60);
-        const totalPrice = hours * futsalCourt.pricePerHour;
+        const courtPrice = hours * futsalCourt.pricePerHour;
+
+        // Process kit rentals if any
+        let processedKitRentals = [];
+        let kitRentalsPrice = 0;
+
+        if (kitRentals && kitRentals.length > 0) {
+            console.log('Processing kit rentals:', kitRentals);
+
+            // Fetch all kit details in one query
+            const kitIds = kitRentals.map(rental => rental.kit);
+            const kits = await Kit.find({ _id: { $in: kitIds } });
+
+            // Create a map for quick lookup
+            const kitMap = new Map(kits.map(kit => [kit._id.toString(), kit]));
+
+            for (const rental of kitRentals) {
+                const kit = kitMap.get(rental.kit.toString());
+                if (!kit) {
+                    return res.status(404).json({ 
+                        message: `Kit not found: ${rental.kit}` 
+                    });
+                }
+
+                if (!kit.isAvailable) {
+                    return res.status(400).json({ 
+                        message: `Kit ${kit.name} is not available` 
+                    });
+                }
+
+                if (rental.quantity > kit.quantity) {
+                    return res.status(400).json({ 
+                        message: `Insufficient quantity for kit: ${kit.name}` 
+                    });
+                }
+
+                const rentalPrice = kit.price * rental.quantity;
+                kitRentalsPrice += rentalPrice;
+
+                processedKitRentals.push({
+                    kit: kit._id,
+                    quantity: rental.quantity,
+                    price: rentalPrice
+                });
+            }
+        }
+
+        const totalPrice = courtPrice + kitRentalsPrice;
 
         const booking = new Booking({
             user,
@@ -122,15 +258,22 @@ router.post('/', verifyToken, async (req, res) => {
             startTime,
             endTime,
             totalPrice,
-            kitRentals,
+            kitRentals: processedKitRentals,
             status: 'pending',
             paymentStatus: 'pending'
+        });
+
+        console.log('Creating booking with data:', {
+            totalPrice,
+            courtPrice,
+            kitRentalsPrice,
+            kitRentals: processedKitRentals
         });
 
         await booking.save();
         res.status(201).json(booking);
     } catch (error) {
-        console.error(error);
+        console.error('Error creating booking:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });
@@ -155,14 +298,97 @@ router.get('/owner', async (req, res) => {
         const futsals = await Futsal.find();
         const futsalIds = futsals.map(f => f._id);
         
-        const bookings = await Booking.find({ futsal: { $in: futsalIds } })
+        // Get all bookings for these futsals
+        let bookings = await Booking.find({ futsal: { $in: futsalIds } })
             .populate('user', 'name email phone')
             .populate('futsal')
+            .populate({
+                path: 'kitRentals.kit',
+                model: 'Kit',
+                select: 'name price size type'
+            })
             .sort({ date: -1, startTime: -1 });
+
+        console.log('Found bookings:', bookings.length);
+        
+        // Check if KitBooking model exists and import it
+        let KitBooking;
+        try {
+            KitBooking = require('../models/KitBooking');
+        } catch (err) {
+            console.log('KitBooking model not found:', err.message);
+        }
+
+        // If KitBooking model exists, fetch kit rentals and merge them with bookings
+        if (KitBooking) {
+            console.log('Fetching kit bookings to merge with regular bookings...');
+            // Convert bookings to array of plain objects so we can modify them
+            bookings = bookings.map(booking => booking.toObject());
+            
+            // Get all kit bookings related to these bookings
+            const bookingIds = bookings.map(b => b._id);
+            const kitBookings = await KitBooking.find({ booking: { $in: bookingIds } })
+                .populate({
+                    path: 'kitRentals.kit',
+                    model: 'Kit',
+                    select: 'name price size type'
+                });
+                
+            console.log('Kit bookings data sample:', 
+                kitBookings.length > 0 ? 
+                JSON.stringify(kitBookings[0].kitRentals, null, 2) : 'No kit bookings found');
+                
+            console.log('Found kit bookings:', kitBookings.length);
+            
+            // Create a map for easy lookup
+            const kitBookingsMap = {};
+            kitBookings.forEach(kb => {
+                kitBookingsMap[kb.booking.toString()] = kb.kitRentals;
+            });
+            
+            // Merge kit rentals into bookings
+            bookings.forEach(booking => {
+                const bookingId = booking._id.toString();
+                if (kitBookingsMap[bookingId]) {
+                    console.log(`Merging kit rentals for booking ${bookingId}`);
+                    
+                    // Convert kit field to kitId field to match frontend expectations
+                    const formattedRentals = kitBookingsMap[bookingId].map(rental => {
+                        return {
+                            kitId: rental.kit, // Rename kit to kitId
+                            quantity: rental.quantity,
+                            price: rental.price
+                        };
+                    });
+                    
+                    // Calculate the total kit rental price
+                    const kitRentalTotal = formattedRentals.reduce((total, rental) => {
+                        return total + (rental.price || 0);
+                    }, 0);
+                    
+                    console.log(`Original booking total price: ${booking.totalPrice}, Kit rental total: ${kitRentalTotal}`);
+                    
+                    // Update the total price to include kit rentals
+                    booking.originalCourtPrice = booking.totalPrice;
+                    booking.totalPrice = (booking.totalPrice || 0) + kitRentalTotal;
+                    
+                    console.log(`Updated total price: ${booking.totalPrice}`);
+                    
+                    booking.kitRentals = formattedRentals;
+                }
+            });
+        }
+        
+        // Log some sample data for debugging
+        if (bookings.length > 0) {
+            console.log('Sample booking kitRentals after merge:', 
+                bookings[0].kitRentals && bookings[0].kitRentals.length ? 
+                bookings[0].kitRentals : 'None');
+        }
             
         res.json(bookings);
     } catch (error) {
-        console.error(error);
+        console.error('Error in /owner route:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });

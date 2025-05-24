@@ -16,6 +16,7 @@ import 'services/favorites_service.dart';
 import 'services/futsal_court_service.dart';
 import 'services/kit_service.dart';
 import 'services/booking_service.dart';
+import 'services/time_slot_service.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/home/kit_browse_screen.dart';
@@ -47,6 +48,9 @@ void main() {
         ),
         ChangeNotifierProvider(
           create: (context) => KitBookingService(context.read<ApiService>(), context.read<AuthService>()),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => TimeSlotService(context.read<ApiService>()),
         ),
       ],
       child: const MyApp(),

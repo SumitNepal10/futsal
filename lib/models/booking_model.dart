@@ -16,10 +16,10 @@ class BookingUser {
 
   factory BookingUser.fromJson(Map<String, dynamic> json) {
     return BookingUser(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      phone: json['phone'] as String,
-      email: json['email'] as String,
+      id: json['_id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Unknown User',
+      phone: json['phone']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
     );
   }
 
@@ -33,30 +33,89 @@ class BookingUser {
   }
 }
 
-class KitRental {
-  final int jerseys;
-  final int shoes;
-  final int balls;
+class FutsalDetails {
+  final String id;
+  final String name;
+  final String location;
+  final double pricePerHour;
 
-  KitRental({
-    required this.jerseys,
-    required this.shoes,
-    required this.balls,
+  FutsalDetails({
+    required this.id,
+    required this.name,
+    required this.location,
+    required this.pricePerHour,
   });
 
-  factory KitRental.fromJson(Map<String, dynamic> json) {
-    return KitRental(
-      jerseys: json['jerseys'] as int,
-      shoes: json['shoes'] as int,
-      balls: json['balls'] as int,
+  factory FutsalDetails.fromJson(Map<String, dynamic> json) {
+    return FutsalDetails(
+      id: json['_id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      location: json['location'] as String? ?? '',
+      pricePerHour: json['pricePerHour']?.toDouble() ?? 0.0,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'jerseys': jerseys,
-      'shoes': shoes,
-      'balls': balls,
+      '_id': id,
+      'name': name,
+      'location': location,
+      'pricePerHour': pricePerHour,
+    };
+  }
+}
+
+class KitItem {
+  final String id;
+  final String name;
+
+  KitItem({
+    required this.id,
+    required this.name,
+  });
+
+  factory KitItem.fromJson(Map<String, dynamic> json) {
+    return KitItem(
+      id: json['_id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      '_id': id,
+      'name': name,
+    };
+  }
+}
+
+class KitRental {
+  final KitItem? kitId;
+  final int? quantity;
+  final double? price;
+
+  KitRental({
+    this.kitId,
+    this.quantity,
+    this.price,
+  });
+
+  factory KitRental.fromJson(Map<String, dynamic> json) {
+    print('KitRental.fromJson input: $json');
+    final kitRental = KitRental(
+      kitId: json['kitId'] != null ? KitItem.fromJson(json['kitId']) : null,
+      quantity: json['quantity'] as int?,
+      price: json['price']?.toDouble(),
+    );
+    print('Created KitRental: kitId=${kitRental.kitId?.name}, quantity=${kitRental.quantity}, price=${kitRental.price}');
+    return kitRental;
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'kitId': kitId?.toJson(),
+      'quantity': quantity,
+      'price': price,
     };
   }
 }
@@ -69,8 +128,8 @@ class Booking {
   final String status;
   final double totalPrice;
   final BookingUser user;
-  final Field field;
-  final KitRental? kitRental;
+  final FutsalDetails? futsal;
+  final List<KitRental>? kitRentals;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -82,25 +141,47 @@ class Booking {
     required this.status,
     required this.totalPrice,
     required this.user,
-    required this.field,
-    this.kitRental,
+    this.futsal,
+    this.kitRentals,
     required this.createdAt,
     required this.updatedAt,
   });
 
+  String? get courtName => futsal?.name;
+
   factory Booking.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(dynamic value) {
+      if (value == null) return null;
+      try {
+        return DateTime.parse(value.toString());
+      } catch (e) {
+        print('Error parsing date: $value');
+        return null;
+      }
+    }
+
     return Booking(
-      id: json['_id'] as String? ?? '',
-      date: DateTime.parse(json['date']),
-      startTime: json['startTime'] as String? ?? '',
-      endTime: json['endTime'] as String? ?? '',
-      status: json['status'] as String? ?? '',
-      totalPrice: json['totalPrice'].toDouble(),
-      user: json['user'] is Map<String, dynamic> ? BookingUser.fromJson(json['user']) : BookingUser(id: json['user'].toString(), name: 'Unknown User', phone: '', email: ''),
-      field: json['field'] is Map<String, dynamic> ? Field.fromJson(json['field']) : Field(id: json['field'].toString(), name: 'Unknown Futsal', description: '', price: 0.0, isAvailable: true, createdAt: DateTime.now(), updatedAt: DateTime.now()),
-      kitRental: json['kitRental'] != null ? KitRental.fromJson(json['kitRental']) : null,
-      createdAt: DateTime.parse(json['createdAt']),
-      updatedAt: DateTime.parse(json['updatedAt']),
+      id: json['_id']?.toString() ?? '',
+      date: parseDate(json['date']) ?? DateTime.now(),
+      startTime: json['startTime']?.toString() ?? '',
+      endTime: json['endTime']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'pending',
+      totalPrice: (json['totalPrice'] ?? 0.0).toDouble(),
+      user: json['user'] is Map<String, dynamic>
+          ? BookingUser.fromJson(json['user'] as Map<String, dynamic>)
+          : BookingUser(
+              id: '',
+              name: 'Unknown User',
+              phone: '',
+              email: '',
+            ),
+      futsal: json['futsal'] != null ? FutsalDetails.fromJson(json['futsal'] as Map<String, dynamic>) : null,
+      kitRentals: (json['kitRentals'] as List<dynamic>?)?.map((item) {
+        print('Processing kit rental item: $item');
+        return KitRental.fromJson(item as Map<String, dynamic>);
+      }).toList(),
+      createdAt: parseDate(json['createdAt']) ?? DateTime.now(),
+      updatedAt: parseDate(json['updatedAt']) ?? DateTime.now(),
     );
   }
 
@@ -112,8 +193,8 @@ class Booking {
       'status': status,
       'totalPrice': totalPrice,
       'user': user.toJson(),
-      'field': field.toJson(),
-      'kitRental': kitRental?.toJson(),
+      'futsal': futsal?.toJson(),
+      'kitRentals': kitRentals?.map((item) => item.toJson()).toList(),
     };
   }
 } 

@@ -3,28 +3,7 @@ import '../models/booking.dart';
 import 'api_service.dart';
 import 'package:intl/intl.dart';
 
-class TimeSlot {
-  final String startTime;
-  final String endTime;
-  final bool isAvailable;
-  final double price;
-
-  TimeSlot({
-    required this.startTime,
-    required this.endTime,
-    required this.isAvailable,
-    required this.price,
-  });
-
-  factory TimeSlot.fromJson(Map<String, dynamic> json) {
-    return TimeSlot(
-      startTime: json['startTime'],
-      endTime: json['endTime'],
-      isAvailable: json['isAvailable'],
-      price: json['price'].toDouble(),
-    );
-  }
-}
+import '../models/time_slot.dart';
 
 class BookingService extends ChangeNotifier {
   final ApiService _apiService;
@@ -198,17 +177,38 @@ class BookingService extends ChangeNotifier {
     try {
       _setLoading(true);
       _setError(null);
+      
+      // Create a new date at midnight to avoid timezone issues
+      final dateAtMidnight = DateTime(date.year, date.month, date.day);
+      print('Original input date: ${date.toString()}');
+      print('Date at midnight: ${dateAtMidnight.toString()}');
+      
+      final formattedDate = DateFormat('yyyy-MM-dd').format(dateAtMidnight);
+      print('Formatted date for API: $formattedDate');
+      print('Date components - Year: ${dateAtMidnight.year}, Month: ${dateAtMidnight.month}, Day: ${dateAtMidnight.day}');
 
       final response = await _apiService.get(
         '/api/bookings/available-slots/$courtId',
         queryParams: {
-          'date': DateFormat('yyyy-MM-dd').format(date),
+          'date': formattedDate,
         },
       );
 
-      final List<TimeSlot> slots = (response['slots'] as List)
-          .map((json) => TimeSlot.fromJson(json))
-          .toList();
+      print('Available slots response type: ${response.runtimeType}');
+      print('Available slots response: $response');
+      
+      List<TimeSlot> slots = [];
+      if (response is List) {
+        print('Response is a List');
+        slots = response.map((json) => TimeSlot.fromJson(json)).toList();
+      } else if (response is Map && response['slots'] != null) {
+        print('Response is a Map with slots key');
+        slots = (response['slots'] as List).map((json) => TimeSlot.fromJson(json)).toList();
+      } else {
+        print('Unexpected response format');
+      }
+      
+      print('Parsed ${slots.length} time slots');
 
       _setLoading(false);
       return slots;

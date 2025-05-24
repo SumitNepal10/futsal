@@ -154,6 +154,10 @@ class _BookingsScreenState extends State<BookingsScreen>
         final userName = booking['userName'] ?? 'N/A';
         final status = booking['status'] ?? 'Unknown';
         final statusColor = _getStatusColor(status);
+        final futsalLocation = booking['futsal']?['location'] ?? 'N/A';
+        final pricePerHour = booking['futsal']?['pricePerHour'] ?? 'N/A';
+        final totalPrice = booking['totalPrice'] ?? 'N/A';
+        final kitRentals = booking['kitRentals'] as List<dynamic>? ?? [];
 
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 8.0),
@@ -230,6 +234,46 @@ class _BookingsScreenState extends State<BookingsScreen>
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8.0),
+                  Text(
+                    'Location: $futsalLocation',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 8.0),
+                  Text(
+                    'Price per Hour: \$$pricePerHour',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 8.0),
+                  Text(
+                    'Total Price: \$$totalPrice',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  if (kitRentals.isNotEmpty) ...[
+                    const SizedBox(height: 8.0),
+                    Text(
+                      'Kit Rentals:',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: kitRentals.length,
+                      itemBuilder: (context, kitIndex) {
+                        final kit = kitRentals[kitIndex];
+                        final kitName = kit['kitId']?['name'] ?? 'N/A';
+                        final kitQuantity = kit['quantity'] ?? 'N/A';
+                        final kitPrice = kit['price'] ?? 'N/A';
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                          child: Text(
+                            '- $kitName (x$kitQuantity) - \$$kitPrice',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),

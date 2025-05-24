@@ -35,11 +35,22 @@ const bookingSchema = new mongoose.Schema({
     kitRentals: [{
         kit: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'Kit'
+            ref: 'Kit',
+            required: true
         },
         quantity: {
             type: Number,
-            default: 1
+            required: true,
+            min: 1,
+            validate: {
+                validator: Number.isInteger,
+                message: '{VALUE} is not an integer value'
+            }
+        },
+        price: {
+            type: Number,
+            required: true,
+            min: 0
         }
     }],
     createdAt: {

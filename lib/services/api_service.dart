@@ -11,6 +11,7 @@ import '../models/booking_model.dart' as booking_model;
 import '../models/time_slot_model.dart';
 import 'package:intl/intl.dart';
 
+
 class ApiService extends ChangeNotifier {
   final String baseUrl = 'http://localhost:5000';
   String? _authToken;
@@ -332,13 +333,48 @@ class ApiService extends ChangeNotifier {
   // Get bookings for owner
   Future<List<Map<String, dynamic>>> getOwnerBookings(String filter) async {
     try {
-      final response = await get('/api/bookings/owner', 
-        queryParams: {'status': filter},
-        requireAuth: false
-      );
-      return List<Map<String, dynamic>>.from(response);
+      print('Fetching owner bookings with filter: $filter');
+      final response = await get('/api/bookings/owner?filter=$filter&include_kit_rentals=true');
+      
+      print('API Response type: ${response.runtimeType}');
+      print('Full API Response: $response');
+      
+      List<Map<String, dynamic>> bookings;
+      
+      if (response is List) {
+        print('Response is a List');
+        bookings = List<Map<String, dynamic>>.from(response);
+      } else if (response is Map && response['bookings'] != null) {
+        print('Response is a Map with bookings key');
+        bookings = List<Map<String, dynamic>>.from(response['bookings']);
+      } else {
+        print('Response is in unexpected format');
+        return [];
+      }
+      
+      print('Number of bookings: ${bookings.length}');
+      for (var booking in bookings) {
+        print('Booking ID: ${booking['_id']}');
+        print('Booking User: ${booking['user']}');
+        print('Booking Futsal: ${booking['futsal']}');
+        print('Booking Kit Rentals: ${booking['kitRentals']}');
+        if (booking['kitRentals'] != null) {
+          print('Kit Rentals Type: ${booking['kitRentals'].runtimeType}');
+          if (booking['kitRentals'] is List) {
+            print('Number of Kit Rentals: ${booking['kitRentals'].length}');
+            for (var rental in booking['kitRentals']) {
+              print('Kit Rental Details: $rental');
+            }
+          }
+        }
+      }
+      
+      return bookings;
+      
+      return [];
     } catch (e) {
-      throw Exception('Failed to fetch bookings: $e');
+      print('Error in getOwnerBookings: $e'); // Debug log
+      throw HttpException('Error fetching owner bookings: $e');
     }
   }
 
@@ -569,14 +605,16 @@ class ApiService extends ChangeNotifier {
       throw Exception('Failed to get current user ID: $e');
     }
   }
+
 }
 
 class HttpException implements Exception {
-  final int statusCode;
   final String message;
 
-  HttpException(this.statusCode, this.message);
+  HttpException(this.message);
 
   @override
-  String toString() => 'HttpException: $statusCode - $message';
-} 
+  String toString() {
+    return message;
+  }
+}

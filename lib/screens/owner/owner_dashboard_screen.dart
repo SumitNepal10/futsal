@@ -25,10 +25,20 @@ class OwnerDashboardScreen extends StatefulWidget {
 
 class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
   int _selectedIndex = 0;
+  List<Booking> _ownerBookings = [];
+  bool _isLoadingOwnerBookings = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+      _fetchOwnerBookings();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    // No need to fetch data here, MyCourtsSection will fetch its own data
     
     return Scaffold(
       appBar: AppBar(
@@ -46,10 +56,17 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
       ),
       body: IndexedStack(
         index: _selectedIndex,
-        children: const [
+        children: [
           MyCourtsSection(),
           KitsSection(),
-          BookingsSection(),
+          _isLoadingOwnerBookings
+              ? Center(child: CircularProgressIndicator())
+              : BookingsSection(
+                  bookings: _ownerBookings,
+                  onRefresh: () async {
+                    await _refreshOwnerBookings();
+                  },
+                ),
           AnalyticsSection(),
         ],
       ),
@@ -68,11 +85,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.calendar_today),
             label: 'Bookings',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.analytics),
-            label: 'Analytics',
-          ),
+          )
         ],
         onTap: (index) {
           setState(() {
@@ -83,13 +96,7 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadData();
-    });
-  }
+
 
   Future<void> _loadData() async {
     if (!mounted) return;
@@ -110,6 +117,40 @@ class _OwnerDashboardScreenState extends State<OwnerDashboardScreen> {
         });
       }
     }
+  }
+
+  Future<void> _fetchOwnerBookings() async {
+    if (!mounted) return;
+    setState(() => _isLoadingOwnerBookings = true);
+    try {
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      final data = await apiService.getOwnerBookings('all');
+      print('Owner Bookings Data: $data'); // Debug log
+      
+      final bookings = data.map((json) {
+        print('Processing booking JSON: $json'); // Debug log
+        return Booking.fromJson(json);
+      }).toList();
+      
+      if (mounted) {
+        setState(() => _ownerBookings = bookings);
+      }
+    } catch (e, stackTrace) {
+      print('Error in _fetchOwnerBookings: $e\n$stackTrace'); // Debug log
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error fetching bookings: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingOwnerBookings = false);
+      }
+    }
+  }
+
+  Future<void> _refreshOwnerBookings() async {
+    await _fetchOwnerBookings();
   }
 }
 
@@ -707,127 +748,210 @@ class _KitsSectionState extends State<KitsSection> {
 }
 
 class BookingsSection extends StatefulWidget {
-  const BookingsSection({Key? key}) : super(key: key);
+  const BookingsSection({Key? key, required this.bookings, required this.onRefresh}) : super(key: key);
+
+  final List<Booking> bookings;
+  final Future<void> Function() onRefresh;
 
   @override
   _BookingsSectionState createState() => _BookingsSectionState();
 }
 
 class _BookingsSectionState extends State<BookingsSection> {
-  List<Map<String, dynamic>> _bookings = [];
-  bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchBookings();
-  }
-
-  Future<void> _fetchBookings() async {
-    setState(() => _isLoading = true);
-    try {
-      final apiService = Provider.of<ApiService>(context, listen: false);
-      final bookings = await apiService.getOwnerBookings('all');
-      setState(() => _bookings = List<Map<String, dynamic>>.from(bookings));
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error fetching bookings: $e')),
-        );
-      }
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: _fetchBookings,
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : CustomScrollView(
-              slivers: [
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text(
-                      'Bookings',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
+      onRefresh: widget.onRefresh,
+      child: CustomScrollView(
+        slivers: [
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'Bookings',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.all(16.0),
+            sliver: widget.bookings.isEmpty
+                ? SliverToBoxAdapter(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(
+                            Icons.calendar_today,
+                            size: 64,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'No bookings found',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.all(16.0),
-                  sliver: _bookings.isEmpty
-                      ? SliverToBoxAdapter(
-                          child: Center(
+                  )
+                : SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final booking = widget.bookings[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.of(context).pushNamed(
+                                '/booking-details',
+                                arguments: booking,
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
                             child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
-                                Icon(
-                                  Icons.calendar_today,
-                                  size: 64,
-                                  color: Colors.grey,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      booking.futsal?.name ?? 'Unknown Futsal',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: booking.status == 'pending'
+                                            ? Colors.orange
+                                            : Colors.green,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        booking.status,
+                                        style: const TextStyle(color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                SizedBox(height: 16),
-                                Text(
-                                  'No bookings found',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.grey,
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 16),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Date: ${booking.date.year}-${booking.date.month.toString().padLeft(2, '0')}-${booking.date.day.toString().padLeft(2, '0')}',
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.access_time, size: 16),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Time: ${booking.startTime.replaceAll(':00:00', '')} - ${booking.endTime.replaceAll(':00:00', '')}',
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.person, size: 16),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Booked by: ${booking.user.name}',
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.phone, size: 16),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Phone: ${booking.user.phone.isEmpty ? 'Not provided' : booking.user.phone}',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: booking.user.phone.isEmpty ? Colors.grey : null,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (booking.kitRentals?.isNotEmpty ?? false) ...[
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.sports_soccer, size: 16),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Kit Rentals:',
+                                        style: const TextStyle(fontSize: 16),
+                                      ),
+                                    ],
                                   ),
+                                  const SizedBox(height: 4),
+                                  ...booking.kitRentals?.map((rental) => Padding(
+                                    padding: const EdgeInsets.only(left: 24, bottom: 4),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          '${rental.kitId?.name ?? 'Unknown Kit'} x${rental.quantity}',
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '(Rs. ${rental.price})',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )).toList() ?? [],
+                                ],
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.attach_money, size: 16),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Total Price: Rs. ${booking.totalPrice}',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
-                        )
-                      : SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final booking = _bookings[index];
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 16),
-                                child: ListTile(
-                                  leading: const Icon(Icons.event),
-                                  title: Text(booking['courtName'] ?? ''),
-                                  subtitle: Text(
-                                    'Date: ${booking['date'] ?? ''}\nTime: ${booking['startTime'] ?? ''} - ${booking['endTime'] ?? ''}',
-                                  ),
-                                  trailing: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _getStatusColor(booking['status']),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      booking['status'] ?? 'Unknown',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                  onTap: () {
-                                    Navigator.of(context).pushNamed(
-                                      '/booking-details',
-                                      arguments: booking,
-                );
-              },
-            ),
-          );
-        },
-                            childCount: _bookings.length,
-                          ),
                         ),
-                ),
-              ],
+                      );
+                      },
+                      childCount: widget.bookings.length,
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }

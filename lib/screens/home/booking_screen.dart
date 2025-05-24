@@ -10,8 +10,10 @@ import 'package:futsal_application/screens/home/booking_confirmation_page.dart';
 import 'dart:convert';
 import 'package:futsal_application/services/api_service.dart';
 import '../../models/booking.dart';
+import '../../models/time_slot.dart';
 import '../../services/booking_service.dart';
 import '../../services/kit_service.dart';
+import '../../services/time_slot_service.dart'; // Added TimeSlotService
 import 'kit_rental_screen.dart';
 import 'dart:async'; // Import dart:async for Timer
 
@@ -41,7 +43,31 @@ class _BookingScreenState extends State<BookingScreen> {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
   String? _error;
-  DateTime _selectedDate = DateTime.now();
+  late DateTime _selectedDate;
+
+  DateTime _getInitialDate() {
+    final now = DateTime.now();
+    print("Current time: ${now.toString()}");
+    print("Current hour (local): ${now.hour}");
+    
+    // Convert to local time and check if it's past 9 PM (21:00)
+    final hour = now.hour;
+    print("Hour in 24-hour format: $hour");
+    
+    if (hour >= 21 || hour < 6) { // If it's past 9 PM or before 6 AM
+      print("Past 9 PM or before 6 AM, selecting tomorrow");
+      // Get tomorrow's date at midnight local time
+      final tomorrow = DateTime(now.year, now.month, now.day + 1);
+      print("Selected date (tomorrow): ${tomorrow.toString()}");
+      return tomorrow;
+    }
+    
+    print("Between 6 AM and 9 PM, selecting today");
+    // Get today's date at midnight local time
+    final today = DateTime(now.year, now.month, now.day);
+    print("Selected date (today): ${today.toString()}");
+    return today;
+  }
   List<TimeSlot> _availableSlots = [];
   TimeSlot? _selectedSlot;
   Timer? _timer; // Add a Timer variable
@@ -49,14 +75,28 @@ class _BookingScreenState extends State<BookingScreen> {
   @override
   void initState() {
     super.initState();
+    print("Initializing BookingScreen");
+    
+    // Set tomorrow's date if after 9 PM
+    final now = DateTime.now();
+    if (now.hour >= 21) {
+      _selectedDate = DateTime(now.year, now.month, now.day + 1);
+      print("After 9 PM, using tomorrow's date: ${_selectedDate.toString()}");
+    } else {
+      _selectedDate = DateTime(now.year, now.month, now.day);
+      print("Before 9 PM, using today's date: ${_selectedDate.toString()}");
+    }
+    
     _loadCourts();
+    
     if (widget.selectedSlot != null) {
       setState(() {
         _selectedSlot = widget.selectedSlot;
       });
-    } else {
-      _fetchAvailableSlots();
     }
+    
+    // Fetch available slots once initialization is complete
+    _fetchAvailableSlots();
   }
 
   @override
@@ -257,24 +297,27 @@ class _BookingScreenState extends State<BookingScreen> {
                     itemCount: currentAvailableSlots.length,
                     itemBuilder: (context, index) {
                       final slot = currentAvailableSlots[index];
-                      return ListTile(
-                        title: Text(
-                          slot != null ? DateFormat('EEEE, MMMM d, y').format(slot) : 'Unknown Date',
-                        ),
-                        subtitle: Text(
-                          slot != null ? DateFormat('h:mm a').format(slot) : 'Unknown Time',
-                        ),
-                        trailing: ElevatedButton(
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => BookingConfirmationPage(
-                                court: court,
-                                selectedTime: slot,
+                      // Create a card for the time slot with cleaner formatting
+                      return Card(
+                        child: ListTile(
+                          title: Text(
+                            slot != null ? DateFormat('HH:mm').format(slot) : 'Unknown Time',
+                          ),
+                          subtitle: Text(
+                            slot != null ? DateFormat('EEEE, MMMM d').format(slot) : 'Unknown Date',
+                          ),
+                          trailing: ElevatedButton(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => BookingConfirmationPage(
+                                  court: court,
+                                  selectedTime: slot,
+                                ),
                               ),
                             ),
+                            child: const Text('Book'),
                           ),
-                          child: const Text('Book'),
                         ),
                       );
                     },
@@ -312,26 +355,38 @@ class _BookingScreenState extends State<BookingScreen> {
     });
 
     try {
-      final bookingService = Provider.of<BookingService>(context, listen: false);
-      final slots = await bookingService.getAvailableSlots(
-        widget.courtId,
-        _selectedDate,
-      );
-      // Filter out slots that are not available and are in the past
+      // Use TimeSlotService instead of BookingService
+      final timeSlotService = Provider.of<TimeSlotService>(context, listen: false);
+      
       final now = DateTime.now();
-      final availableSlots = slots.where((slot) {
-        final slotStartDateTime = DateTime(
-          _selectedDate.year,
-          _selectedDate.month,
-          _selectedDate.day,
-          int.parse(slot.startTime.split(':')[0]),
-          int.parse(slot.startTime.split(':')[1]),
-        );
-        return slot.isAvailable && slotStartDateTime.isAfter(now);
-      }).toList();
+      print('Current time: ${now.toString()}');
+      
+      // If it's past 9 PM, use tomorrow's date
+      DateTime targetDate;
+      if (now.hour >= 21) {
+        targetDate = DateTime(now.year, now.month, now.day + 1);
+        print('Past 9 PM, using tomorrow: ${targetDate.toString()}');
+      } else {
+        targetDate = DateTime(now.year, now.month, now.day);
+        print('Before 9 PM, using today: ${targetDate.toString()}');
+      }
+      
+      // Fetch slots using the time slot service
+      await timeSlotService.fetchTimeSlots(widget.courtId, targetDate);
+      final slots = timeSlotService.timeSlots;
+      
+      // Filter slots if it's today
+      final isToday = targetDate.day == now.day && targetDate.month == now.month && targetDate.year == now.year;
+      print('Is today: $isToday');
+      
+      final availableSlots = isToday
+        ? slots.where((slot) => slot.isAvailable && slot.startTime.isAfter(now)).toList()
+        : slots.where((slot) => slot.isAvailable).toList();
+      
       setState(() {
         _availableSlots = availableSlots;
-        _selectedSlot = null;
+        _isLoading = false;
+        _error = null;
       });
     } catch (e) {
       setState(() {
@@ -379,8 +434,8 @@ class _BookingScreenState extends State<BookingScreen> {
         'futsal': widget.courtId,
         'futsalName': widget.courtName,
         'date': DateFormat('yyyy-MM-dd').format(_selectedDate),
-        'startTime': _selectedSlot!.startTime,
-        'endTime': _selectedSlot!.endTime,
+        'startTime': _selectedSlot!.formattedStartTime, // Use the formatted time string
+        'endTime': _selectedSlot!.formattedEndTime, // Use the formatted time string
         'totalPrice': _selectedSlot!.price,
         'status': 'pending',
       };
@@ -403,7 +458,7 @@ class _BookingScreenState extends State<BookingScreen> {
               const SizedBox(height: 8),
               Text('Court: ${widget.courtName}'),
               Text('Date: ${DateFormat('MMM d, y').format(_selectedDate)}'),
-              Text('Time: ${_selectedSlot!.startTime} - ${_selectedSlot!.endTime}'),
+              Text('Time: ${_selectedSlot!.formattedTimeRange}'),
               Text('Price: RS${_selectedSlot!.price.toStringAsFixed(2)}'),
             ],
           ),
@@ -451,8 +506,8 @@ class _BookingScreenState extends State<BookingScreen> {
         'futsal': widget.courtId,
         'futsalName': widget.courtName,
         'date': DateFormat('yyyy-MM-dd').format(_selectedDate),
-        'startTime': slot.startTime,
-        'endTime': slot.endTime,
+        'startTime': slot.formattedStartTime, // Use the formatted time string
+        'endTime': slot.formattedEndTime, // Use the formatted time string
         'totalPrice': slot.price,
         'status': 'pending',
       };
@@ -477,6 +532,28 @@ class _BookingScreenState extends State<BookingScreen> {
         );
       }
     }
+  }
+
+  bool _isToday(TimeSlot slot) {
+    final now = DateTime.now();
+    final slotDate = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
+    final today = DateTime(now.year, now.month, now.day);
+    return slotDate.isAtSameMomentAs(today);
+  }
+
+  bool _isTomorrow(TimeSlot slot) {
+    final now = DateTime.now();
+    final slotDate = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
+    final tomorrow = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    return slotDate.isAtSameMomentAs(tomorrow);
   }
 
   @override
@@ -504,7 +581,7 @@ class _BookingScreenState extends State<BookingScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Time: ${_selectedSlot!.startTime} - ${_selectedSlot!.endTime}',
+                        'Time: ${_selectedSlot!.formattedTimeRange}',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 4),
@@ -540,10 +617,22 @@ class _BookingScreenState extends State<BookingScreen> {
               const SizedBox(height: 16),
 
               // Available Time Slots
-              Text(
-                'Available Time Slots',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              if (_availableSlots.isEmpty) ...[
+                Text(
+                  'No available slots for today',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Tomorrow\'s Time Slots',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ] else ...[
+                Text(
+                  'Available Time Slots',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
               const SizedBox(height: 8),
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -551,27 +640,82 @@ class _BookingScreenState extends State<BookingScreen> {
                       ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
                       : _availableSlots.isEmpty
                           ? const Center(child: Text('No available slots for selected date'))
-                          : ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _availableSlots.length,
-                              itemBuilder: (context, index) {
-                                final slot = _availableSlots[index];
-                                return Card(
-                                  child: ListTile(
-                                    title: Text('${slot.startTime} - ${slot.endTime}'),
-                                    subtitle: Text('Price: RS${slot.price.toStringAsFixed(2)}'),
-                                    trailing: ElevatedButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          _selectedSlot = slot;
-                                        });
-                                      },
-                                      child: const Text('Select'),
-                                    ),
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Today's slots
+                                if (_availableSlots.any((slot) => _isToday(slot))) ...[                                  
+                                  const Text('Today\'s Slots',
+                                      style: TextStyle(fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 8),
+                                  ListView.builder(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: _availableSlots.where((slot) => _isToday(slot)).length,
+                                    itemBuilder: (context, index) {
+                                      final slot = _availableSlots.where((slot) => _isToday(slot)).toList()[index];
+                                      return Card(
+                                        child: ListTile(
+                                          title: Text(slot.formattedTimeRange),
+                                          subtitle: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(slot.formattedDate, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                              Text('Price: RS${slot.price.toStringAsFixed(2)}'),
+                                            ],
+                                          ),
+                                          trailing: ElevatedButton(
+                                            onPressed: () {
+                                              setState(() {
+                                                _selectedSlot = slot;
+                                              });
+                                            },
+                                            child: const Text('Select'),
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
-                                );
-                              },
+                                  const SizedBox(height: 16),
+                                ],
+                                
+                                // Tomorrow's slots
+                                if (_availableSlots.any((slot) => _isTomorrow(slot))) ...[                                  
+                                  const Text('Tomorrow\'s Slots',
+                                      style: TextStyle(fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 8),
+                                  ListView.builder(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: _availableSlots.where((slot) => _isTomorrow(slot)).length,
+                                    itemBuilder: (context, index) {
+                                      final slot = _availableSlots.where((slot) => _isTomorrow(slot)).toList()[index];
+                                      return Card(
+                                        child: ListTile(
+                                          title: Text(slot.formattedTimeRange),
+                                          subtitle: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(slot.formattedDate, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                              Text('Price: RS${slot.price.toStringAsFixed(2)}'),
+                                            ],
+                                          ),
+                                          trailing: ElevatedButton(
+                                            onPressed: () {
+                                              setState(() {
+                                                _selectedSlot = slot;
+                                              });
+                                            },
+                                            child: const Text('Select'),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ],
                             ),
             ],
           ],

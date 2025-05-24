@@ -21,16 +21,20 @@ class TimeSlotService extends ChangeNotifier {
       notifyListeners();
 
       final response = await _apiService.get(
-        '/api/time-slots',
+        '/api/bookings/available-slots/${fieldId}',
         queryParams: {
-          'field': fieldId,
           'date': date.toIso8601String(),
         },
       );
 
-      _timeSlots = (response['data'] as List)
-          .map((json) => TimeSlot.fromJson(json))
-          .toList();
+      // The response format is {slots: [...]} for the available-slots endpoint
+      if (response['slots'] != null) {
+        _timeSlots = (response['slots'] as List)
+            .map((json) => TimeSlot.fromJson(json))
+            .toList();
+      } else {
+        _timeSlots = [];
+      }
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -51,7 +55,7 @@ class TimeSlotService extends ChangeNotifier {
 
       final response = await _apiService.post(
         '/api/time-slots',
-        {
+        body: {
           'field': fieldId,
           'startTime': startTime.toIso8601String(),
           'endTime': endTime.toIso8601String(),
@@ -78,18 +82,20 @@ class TimeSlotService extends ChangeNotifier {
 
       await _apiService.put(
         '/api/time-slots/$timeSlotId',
-        {
+        body: {
           'isAvailable': isAvailable,
         },
       );
 
       final index = _timeSlots.indexWhere((slot) => slot.id == timeSlotId);
       if (index != -1) {
+        final timeSlot = _timeSlots[index];
         _timeSlots[index] = TimeSlot(
-          id: timeSlotId,
-          startTime: _timeSlots[index].startTime,
-          endTime: _timeSlots[index].endTime,
+          id: timeSlot.id,
+          startTime: timeSlot.startTime,
+          endTime: timeSlot.endTime,
           isAvailable: isAvailable,
+          price: timeSlot.price,
         );
       }
 

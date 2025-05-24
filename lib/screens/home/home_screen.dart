@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/futsal_court_service.dart';
 import '../../models/futsal_court.dart';
+import '../../models/time_slot.dart';
 import 'booking_screen.dart';
 import 'kit_rental_screen.dart';
 import '../../models/booking.dart';
@@ -153,8 +154,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         final slot = availableSlots[index];
                         return Card(
                           child: ListTile(
-                            title: Text('${slot.startTime} - ${slot.endTime}'),
-                            subtitle: Text('Price: RS${slot.price.toStringAsFixed(2)}'),
+                            title: Text(slot.formattedTimeRange),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(slot.formattedDate, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text('Price: RS${slot.price.toStringAsFixed(2)}'),
+                              ],
+                            ),
                             trailing: ElevatedButton(
                               onPressed: () {
                                 Navigator.pop(context);
